@@ -1,0 +1,44 @@
+name: Build Telegram Bot API Server (Windows)
+
+on:
+  workflow_dispatch: # запуск вручную через GitHub Actions
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: 🧾 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: true  # нужно для TDLib
+
+      - name: ⚙️ Install dependencies
+        run: |
+          choco install openssl -y
+          choco install gperf -y
+
+      - name: 🧱 Configure CMake
+        run: |
+          mkdir build
+          cd build
+          cmake .. -G "Visual Studio 17 2022" -A x64 `
+            -DOPENSSL_ROOT_DIR="C:/Program Files/OpenSSL-Win64" `
+            -DZLIB_LIBRARY=" " `
+            -DZLIB_INCLUDE_DIR=" " `
+            -DCMAKE_BUILD_TYPE=Release
+
+      - name: 🔨 Build
+        run: |
+          cd build
+          cmake --build . --config Release --target install -j4
+
+      - name: 📦 Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: telegram-bot-api
+          path: build/Release/telegram-bot-api.exe
