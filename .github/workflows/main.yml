@@ -1,44 +1,84 @@
-name: Build Telegram Bot API Server (Windows)
+name: Build Telegram Bot API Server (Windows + Linux)
 
 on:
-  workflow_dispatch: # запуск вручную через GitHub Actions
+  workflow_dispatch:
   push:
     branches:
       - main
       - master
 
 jobs:
-  build:
+  build-windows:
+    name: 🪟 Build for Windows
     runs-on: windows-latest
 
     steps:
       - name: 🧾 Checkout repository
         uses: actions/checkout@v4
         with:
-          submodules: true  # нужно для TDLib
+          submodules: true  # подтягивает TDLib
 
       - name: ⚙️ Install dependencies
         run: |
-          choco install openssl -y
-          choco install gperf -y
+          choco install cmake git visualstudio2022buildtools -y
+          refreshenv
 
-      - name: 🧱 Configure CMake
+      - name: 🧱 Build Telegram Bot API (via vcpkg)
+        shell: pwsh
         run: |
+          Write-Host "📦 Cloning vcpkg..."
+          git clone https://github.com/Microsoft/vcpkg.git
+          cd vcpkg
+          .\bootstrap-vcpkg.bat
+
+          Write-Host "⚙️ Installing required libs..."
+          .\vcpkg.exe install gperf:x64-windows openssl:x64-windows zlib:x64-windows
+
+          cd ..
+          if (Test-Path build) { Remove-Item build -Recurse -Force }
+
           mkdir build
           cd build
-          cmake .. -G "Visual Studio 17 2022" -A x64 `
-            -DOPENSSL_ROOT_DIR="C:/Program Files/OpenSSL-Win64" `
-            -DZLIB_LIBRARY=" " `
-            -DZLIB_INCLUDE_DIR=" " `
-            -DCMAKE_BUILD_TYPE=Release
 
-      - name: 🔨 Build
-        run: |
-          cd build
-          cmake --build . --config Release --target install -j4
+          Write-Host "🧩 Configuring CMake..."
+          cmake -A x64 `
+            -DCMAKE_INSTALL_PREFIX:PATH=.. `
+            -DCMAKE_TOOLCHAIN_FILE:FILEPATH=../vcpkg/scripts/buildsystems/vcpkg.cmake `
+            ..
 
-      - name: 📦 Upload binary
+          Write-Host "🏗️ Building project..."
+          cmake --build . --target install --config Release
+
+      - name: 📦 Upload Windows binary
         uses: actions/upload-artifact@v4
         with:
-          name: telegram-bot-api
-          path: build/Release/telegram-bot-api.exe
+          name: telegram-bot-api-windows
+          path: telegram-bot-api/bin/telegram-bot-api.exe
+
+  build-linux:
+    name: 🐧 Build for Linux
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🧾 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: true  # TDLib обязательно нужен
+
+      - name: ⚙️ Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y git cmake g++ zlib1g-dev libssl-dev gperf
+
+      - name: 🧱 Build Telegram Bot API
+        run: |
+          rm -rf build
+          mkdir build && cd build
+          cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX:PATH=.. ..
+          cmake --build . --target install -j$(nproc)
+
+      - name: 📦 Upload Linux binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: telegram-bot-api-linux
+          path: telegram-bot-api/bin/telegram-bot-api
