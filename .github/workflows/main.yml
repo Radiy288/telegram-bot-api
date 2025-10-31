@@ -8,90 +8,86 @@ on:
 
 jobs:
   build-windows:
-    name: 🪟 Build for Windows
+    name: Build for Windows
     runs-on: windows-latest
     steps:
-      - name: 🧾 Checkout repository
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          submodules: true # подтягивает TDLib
+          submodules: true
 
-      - name: ⚙️ Install dependencies
+      - name: Install dependencies
         run: |
           choco install cmake git visualstudio2022buildtools -y
           refreshenv
 
-      - name: 🧱 Build Telegram Bot API (via vcpkg)
+      - name: Build Telegram Bot API (via vcpkg)
         shell: pwsh
         run: |
-          Write-Host "📦 Cloning vcpkg..."
+          Write-Host "Cloning vcpkg..."
           git clone https://github.com/Microsoft/vcpkg.git
           cd vcpkg
           .\bootstrap-vcpkg.bat
-          Write-Host "⚙️ Installing required libs..."
+          Write-Host "Installing required libs..."
           .\vcpkg.exe install gperf:x64-windows openssl:x64-windows zlib:x64-windows
           cd ..
           if (Test-Path build) { Remove-Item build -Recurse -Force }
           mkdir build
           cd build
-          Write-Host "🧩 Configuring CMake..."
+          Write-Host "Configuring CMake..."
           cmake -A x64 `
             -DCMAKE_INSTALL_PREFIX:PATH=.. `
             -DCMAKE_TOOLCHAIN_FILE:FILEPATH=../vcpkg/scripts/buildsystems/vcpkg.cmake `
             ..
-          Write-Host "🏗️ Building project..."
+          Write-Host "Building project..."
           cmake --build . --target install --config Release
 
-      - name: 🔍 Debug: List bin/ contents
+      - name: Debug: List bin/ contents
         shell: pwsh
         run: |
           Write-Host "=== Содержимое bin/ ==="
           Get-ChildItem -Path telegram-bot-api/bin -Recurse -File | Format-Table Name, Length, Extension
 
-      - name: 📦 Upload ALL .exe and .dll (Windows)
+      - name: Upload ALL .exe and .dll (Windows)
         uses: actions/upload-artifact@v4
         with:
           name: telegram-bot-api-windows
-          path: |
-            telegram-bot-api/bin/**/*.exe
-            telegram-bot-api/bin/**/*.dll
+          path: telegram-bot-api/bin/**/*.exe telegram-bot-api/bin/**/*.dll
           if-no-files-found: error
           compression-level: 6
           overwrite: true
 
   build-linux:
-    name: 🐧 Build for Linux
+    name: Build for Linux
     runs-on: ubuntu-latest
     steps:
-      - name: 🧾 Checkout repository
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          submodules: true # TDLib обязательно нужен
+          submodules: true
 
-      - name: ⚙️ Install dependencies
+      - name: Install dependencies
         run: |
           sudo apt update
           sudo apt install -y git cmake g++ zlib1g-dev libssl-dev gperf
 
-      - name: 🧱 Build Telegram Bot API
+      - name: Build Telegram Bot API
         run: |
           rm -rf build
           mkdir build && cd build
           cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX:PATH=.. ..
           cmake --build . --target install -j$(nproc)
 
-      - name: 🔍 Debug: List bin/ contents
+      - name: Debug: List bin/ contents
         run: |
           echo "=== Содержимое bin/ ==="
           find telegram-bot-api/bin -type f -ls
 
-      - name: 📦 Upload Linux binary (and any .so if present)
+      - name: Upload Linux binary (and any .so if present)
         uses: actions/upload-artifact@v4
         with:
           name: telegram-bot-api-linux
-          path: |
-            telegram-bot-api/bin/telegram-bot-api
-            telegram-bot-api/bin/**/*.so
+          path: telegram-bot-api/bin/telegram-bot-api telegram-bot-api/bin/**/*.so
           if-no-files-found: error
           compression-level: 6
           overwrite: true
